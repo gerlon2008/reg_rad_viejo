@@ -77,8 +77,8 @@ $id_planilla = $_GET['id_planilla'];
 <div>
 	<img src="Images/loading.gif">
 </div>
-	<div id="container" style="width: 1000px; height: 800px; display: none;">
-		<canvas id="canvas" width="1000" height="800"></canvas>
+	<div id="container" style="width: 1210px; height: 920px; display: none;">
+		<canvas id="canvas" width="1210" height="920"></canvas>
 	<button id="randomizeData">Randomize Data</button>
 	<button id="addDataset">Add Dataset</button>
 	<button id="removeDataset">Remove Dataset</button>
@@ -132,6 +132,7 @@ $id_planilla = $_GET['id_planilla'];
 						tension: 0
 					}},
 					responsive: false,
+					maintainAspectRatio: false,
 					legend: {
 						position: 'top',
 					},
