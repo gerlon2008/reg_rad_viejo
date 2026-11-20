@@ -983,7 +983,26 @@ $pdf->Image($_SERVER["DOCUMENT_ROOT"]."/ptr/registro_rad5/Graficos/graf.jpg", 13
 
 //Close and output PDF document
 ob_end_clean();
-$pdf->Output(__DIR__ .'/Registros_pdfs/Registro_'.formafecha11($row_planilla_en_curso['fecha']).' - '.($row_planilla_en_curso['horarios']).'.pdf', 'FD');
+
+$nombre_archivo_pdf = 'Registro_'.formafecha11($row_planilla_en_curso['fecha']).' - '.($row_planilla_en_curso['horarios']).'.pdf';
+$ruta_archivo_pdf   = __DIR__ .'/Registros_pdfs/' . $nombre_archivo_pdf;
+
+// 1. Guardar el PDF en el servidor
+$pdf->Output($ruta_archivo_pdf, 'F');
+
+// 2. Enviar automáticamente por correo institucional (control de no reenvío incluido)
+if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
+    require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php");
+} else if (file_exists(__DIR__ . '/enviar_mail_planilla.php')) {
+    require_once(__DIR__ . '/enviar_mail_planilla.php');
+}
+
+if (function_exists('enviar_planilla_por_correo')) {
+    enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex);
+}
+
+// 3. Forzar descarga en el navegador como hacía habitualmente
+$pdf->Output($nombre_archivo_pdf, 'D');
 echo "<script>window.close();</script>";
 
 //============================================================+
