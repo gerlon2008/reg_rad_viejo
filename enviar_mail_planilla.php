@@ -46,7 +46,7 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     }
 
     // B) Control por archivo testigo en disco (doble seguridad)
-    $dir_registros = is_string($ruta_pdf) ? dirname($ruta_pdf) : __DIR__ . '/Registros_pdfs';
+    $dir_registros = (!empty($ruta_pdf) && is_string($ruta_pdf)) ? dirname($ruta_pdf) : ($_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/Registros_pdfs');
     $archivo_lock = $dir_registros . '/.mail_enviado_' . $id_planilla . '.lock';
     if (file_exists($archivo_lock)) {
         return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (archivo lock)');
