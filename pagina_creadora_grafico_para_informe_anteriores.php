@@ -77,8 +77,8 @@ $id_planilla = $_GET['id_planilla'];
 <div>
 	<img src="Images/loading.gif">
 </div>
-	<div id="container" style="width: 75%;display: none;">
-		<canvas id="canvas" height="800px" width="1000px"></canvas>
+	<div id="container" style="width: 1000px; height: 800px; display: none;">
+		<canvas id="canvas" width="1000" height="800"></canvas>
 	<button id="randomizeData">Randomize Data</button>
 	<button id="addDataset">Add Dataset</button>
 	<button id="removeDataset">Remove Dataset</button>
@@ -90,6 +90,14 @@ $id_planilla = $_GET['id_planilla'];
 	</div>
 	</div>
 	<script>
+		Chart.plugins.register({
+			beforeDraw: function(chartInstance) {
+				var ctx = chartInstance.chart.ctx;
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, chartInstance.chart.width, chartInstance.chart.height);
+			}
+		});
+
 		var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 		var color = Chart.helpers.color;
 		var barChartData = {

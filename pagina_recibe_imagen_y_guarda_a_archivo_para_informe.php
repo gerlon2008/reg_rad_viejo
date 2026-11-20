@@ -12,48 +12,53 @@ if (!$fileData) {
     exit;
 }
 
-// Carpeta donde se guarda graf.jpg
-$dirGraficos = __DIR__ . '/Graficos';
-if (!is_dir($dirGraficos)) {
-    @mkdir($dirGraficos, 0777, true);
-}
-$fileName = $dirGraficos . '/graf.jpg';
-
-// Cargar la imagen PNG directamente desde los datos decodificados
+// Cargar la imagen directamente desde la memoria
 if (function_exists('imagecreatefromstring')) {
     $image = @imagecreatefromstring($fileData);
 } else {
-    file_put_contents($fileName, $fileData);
-    $image = @imagecreatefrompng($fileName);
+    $tmp_png = __DIR__ . '/Graficos/temp_chart.png';
+    file_put_contents($tmp_png, $fileData);
+    $image = @imagecreatefrompng($tmp_png);
+    @unlink($tmp_png);
 }
 
 if (!$image) {
     exit;
 }
 
-// Obtenemos el ancho y alto REALES del gráfico exportado por el navegador
 $ancho = imagesx($image);
 $alto  = imagesy($image);
 
-// 1. Creamos el lienzo del tamaño exacto del gráfico
+// 1. Creamos un lienzo con fondo blanco puro sólido
 $tmp = imagecreatetruecolor($ancho, $alto);
-
-// 2. Rellenamos el lienzo con fondo BLANCO puro
 $blanco = imagecolorallocate($tmp, 255, 255, 255);
-imagefill($tmp, 0, 0, $blanco);
+imagefilledrectangle($tmp, 0, 0, $ancho, $alto, $blanco);
 
-// 3. Copiamos el gráfico con mezcla de transparencia sobre el fondo blanco
+// 2. Copiamos el gráfico sobre el fondo blanco
 imagealphablending($tmp, true);
 imagecopy($tmp, $image, 0, 0, 0, 0, $ancho, $alto);
 
-// 4. Rotamos 90 grados indicando BLANCO como color de fondo para la rotación (elimina las franjas negras)
-$blanco_rotacion = imagecolorallocate($tmp, 255, 255, 255);
-$rotate = imagerotate($tmp, 90, $blanco_rotacion);
+// 3. Rotamos 90 grados con fondo BLANCO puro
+$rotate = imagerotate($tmp, 90, 0xFFFFFF);
 
-// 5. Guardamos en JPG con calidad máxima 100
-imagejpeg($rotate, $fileName, 100);
+// 4. Guardamos en Graficos/graf.jpg (tanto en ruta absoluta como relativa)
+$dirGraficos = isset($_SERVER["DOCUMENT_ROOT"]) 
+    ? ($_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/Graficos') 
+    : (__DIR__ . '/Graficos');
 
-// 6. Liberamos la memoria de GD
+if (!is_dir($dirGraficos)) {
+    @mkdir($dirGraficos, 0777, true);
+}
+
+$fileNameAbs = $dirGraficos . '/graf.jpg';
+$fileNameRel = __DIR__ . '/Graficos/graf.jpg';
+
+imagejpeg($rotate, $fileNameAbs, 100);
+if ($fileNameAbs !== $fileNameRel) {
+    @imagejpeg($rotate, $fileNameRel, 100);
+}
+
+// 5. Liberar memoria
 imagedestroy($tmp);
 imagedestroy($image);
 imagedestroy($rotate);
