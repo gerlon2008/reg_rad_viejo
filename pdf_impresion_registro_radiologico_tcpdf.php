@@ -986,7 +986,7 @@ $pdf->Image($_SERVER["DOCUMENT_ROOT"]."/ptr/registro_rad5/Graficos/graf.jpg", 13
 ob_end_clean();
 
 $nombre_archivo_pdf = 'Registro_'.formafecha11($row_planilla_en_curso['fecha']).' - '.($row_planilla_en_curso['horarios']).'.pdf';
-$dir_registros      = $_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/Registros_pdfs';
+$dir_registros      = __DIR__ . '/Registros_pdfs';
 $ruta_archivo_pdf   = $dir_registros . '/' . $nombre_archivo_pdf;
 
 // 1. Obtener el contenido binario del PDF generado en memoria (garantiza que tenga todos los datos)

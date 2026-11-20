@@ -8,20 +8,35 @@ require_once(__DIR__ . '/enviar_mail_planilla.php');
 
 echo "<h2>Prueba de Envío de Correo con PDF Adjunto a Exchange</h2>";
 
-// 1. Buscamos si ya existe algún PDF en Registros_pdfs o creamos un archivo PDF mínimo de prueba
-$dir_pdf = __DIR__ . '/Registros_pdfs';
-if (!is_dir($dir_pdf)) {
-    @mkdir($dir_pdf, 0777, true);
+$carpetas_posibles = array(
+    $_SERVER["DOCUMENT_ROOT"] . '/ptr/TCPDF-master/examples/Registros_pdfs',
+    __DIR__ . '/Registros_pdfs'
+);
+
+$ruta_pdf_prueba = '';
+$nombre_pdf_prueba = '';
+
+foreach ($carpetas_posibles as $dir_pdf) {
+    if (is_dir($dir_pdf)) {
+        $archivos = glob($dir_pdf . '/*.pdf');
+        if (!empty($archivos)) {
+            $ruta_pdf_prueba = end($archivos); // Tomar el más reciente
+            $nombre_pdf_prueba = basename($ruta_pdf_prueba);
+            echo "<p>Encontrado PDF real histórico en <b>$dir_pdf</b>: <b>$nombre_pdf_prueba</b></p>";
+            break;
+        }
+    }
 }
 
-// Intentar encontrar un PDF existente en la carpeta
-$archivos = glob($dir_pdf . '/*.pdf');
-if (!empty($archivos)) {
-    $ruta_pdf_prueba = $archivos[0];
-    $nombre_pdf_prueba = basename($ruta_pdf_prueba);
-    echo "<p>Usando PDF existente para la prueba: <b>$nombre_pdf_prueba</b></p>";
-} else {
-    // PDF válido con texto visible para la prueba
+if (empty($ruta_pdf_prueba)) {
+    // Si no se encontró ningún PDF real, generamos uno de prueba con texto visible
+    $dir_fallback = __DIR__ . '/Registros_pdfs';
+    if (!is_dir($dir_fallback)) {
+        @mkdir($dir_fallback, 0777, true);
+    }
+    $ruta_pdf_prueba = $dir_fallback . '/Prueba_Planilla_Radiologica.pdf';
+    $nombre_pdf_prueba = 'Prueba_Planilla_Radiologica.pdf';
+
     $stream_txt = "BT\n/F1 20 Tf\n50 720 Td\n(NUCLEOELECTRICA ARGENTINA S.A.) Tj\n/F1 14 Tf\n0 -40 Td\n(SISTEMA DE REGISTRO RADIOLOGICO) Tj\n/F1 11 Tf\n0 -30 Td\n(Prueba de envio automatico con adjunto PDF a Exchange.) Tj\n0 -20 Td\n(Fecha de prueba: " . date('d/m/Y H:i:s') . ") Tj\nET";
     $stream_len = strlen($stream_txt);
     $contenido_pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n5 0 obj\n<< /Length $stream_len >>\nstream\n$stream_txt\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000244 00000 n \n0000000318 00000 n \ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n540\n%%EOF";
