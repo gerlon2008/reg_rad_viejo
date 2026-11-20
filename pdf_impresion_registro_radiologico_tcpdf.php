@@ -982,15 +982,23 @@ $pdf->Image($_SERVER["DOCUMENT_ROOT"]."/ptr/registro_rad5/Graficos/graf.jpg", 13
 // ---------------------------------------------------------
 
 //Close and output PDF document
+//Close and output PDF document
 ob_end_clean();
 
 $nombre_archivo_pdf = 'Registro_'.formafecha11($row_planilla_en_curso['fecha']).' - '.($row_planilla_en_curso['horarios']).'.pdf';
-$ruta_archivo_pdf   = __DIR__ .'/Registros_pdfs/' . $nombre_archivo_pdf;
+$dir_registros      = __DIR__ . '/Registros_pdfs';
+$ruta_archivo_pdf   = $dir_registros . '/' . $nombre_archivo_pdf;
 
-// 1. Guardar el PDF en el servidor
-$pdf->Output($ruta_archivo_pdf, 'F');
+// 1. Obtener el contenido binario del PDF generado en memoria (garantiza que tenga todos los datos)
+$pdf_contenido = $pdf->Output('', 'S');
 
-// 2. Enviar automáticamente por correo institucional (control de no reenvío incluido)
+// 2. Asegurar que el directorio Registros_pdfs exista y guardar una copia física en el servidor
+if (!is_dir($dir_registros)) {
+    @mkdir($dir_registros, 0777, true);
+}
+@file_put_contents($ruta_archivo_pdf, $pdf_contenido);
+
+// 3. Enviar automáticamente por correo institucional a Exchange con el PDF adjunto
 if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
     require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php");
 } else if (file_exists(__DIR__ . '/enviar_mail_planilla.php')) {
@@ -998,12 +1006,17 @@ if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_plan
 }
 
 if (function_exists('enviar_planilla_por_correo')) {
-    enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex);
+    enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido);
 }
 
-// 3. Forzar descarga en el navegador como hacía habitualmente
-$pdf->Output($nombre_archivo_pdf, 'D');
-echo "<script>window.close();</script>";
+// 4. Entregar el archivo PDF al navegador para descarga/visualización
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="' . $nombre_archivo_pdf . '"');
+header('Content-Length: ' . strlen($pdf_contenido));
+header('Cache-Control: private, max-age=0, must-revalidate');
+header('Pragma: public');
+echo $pdf_contenido;
+exit;
 
 //============================================================+
 // END OF FILE

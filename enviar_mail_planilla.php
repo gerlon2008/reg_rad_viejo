@@ -5,7 +5,7 @@
  * Compatible con PHP 5.5+ (no requiere OpenSSL ni librerías externas)
  */
 
-function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $datos_planilla = array(), $miconex = null) {
+function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $datos_planilla = array(), $miconex = null, $pdf_contenido_directo = null) {
     // -------------------------------------------------------------
     // 1. CONFIGURACIÓN DEL SERVIDOR Y DESTINATARIOS
     // -------------------------------------------------------------
@@ -46,15 +46,22 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     }
 
     // B) Control por archivo testigo en disco (doble seguridad)
-    $dir_registros = dirname($ruta_pdf);
+    $dir_registros = is_string($ruta_pdf) ? dirname($ruta_pdf) : __DIR__ . '/Registros_pdfs';
     $archivo_lock = $dir_registros . '/.mail_enviado_' . $id_planilla . '.lock';
     if (file_exists($archivo_lock)) {
         return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (archivo lock)');
     }
 
-    // Verificar que el PDF exista en disco y no esté vacío
-    if (!file_exists($ruta_pdf) || filesize($ruta_pdf) == 0) {
-        return array('exito' => false, 'mensaje' => 'El archivo PDF no existe o está vacío: ' . $ruta_pdf);
+    // Obtener el contenido del PDF (directo en memoria o desde disco)
+    $pdf_contenido = '';
+    if (!empty($pdf_contenido_directo)) {
+        $pdf_contenido = $pdf_contenido_directo;
+    } else if (!empty($ruta_pdf) && file_exists($ruta_pdf) && filesize($ruta_pdf) > 0) {
+        $pdf_contenido = file_get_contents($ruta_pdf);
+    }
+
+    if (empty($pdf_contenido)) {
+        return array('exito' => false, 'mensaje' => 'El contenido del PDF está vacío o no se encontró el archivo: ' . $ruta_pdf);
     }
 
     // -------------------------------------------------------------
@@ -121,8 +128,10 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     // -------------------------------------------------------------
     $boundary = "==_MIME_BOUNDARY_" . md5(time() . $id_planilla);
 
-    // Leer y codificar el PDF en base64
-    $pdf_contenido = file_get_contents($ruta_pdf);
+    // Codificar el PDF en base64
+    if (empty($pdf_contenido) && !empty($ruta_pdf) && file_exists($ruta_pdf)) {
+        $pdf_contenido = file_get_contents($ruta_pdf);
+    }
     $pdf_adjunto_b64 = chunk_split(base64_encode($pdf_contenido));
 
     $cuerpo_mime  = "From: $nombre_de <$remitente>\r\n";
