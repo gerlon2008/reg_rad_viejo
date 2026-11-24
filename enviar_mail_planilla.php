@@ -7,11 +7,10 @@
 
 function registrar_log_mail($mensaje) {
     $linea = '[' . date('Y-m-d H:i:s') . '] ' . $mensaje . "\n";
-    $rutas = array();
+    $rutas = array(__DIR__ . '/mail_envio_debug.log');
     if (!empty($_SERVER["DOCUMENT_ROOT"])) {
         $rutas[] = $_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/mail_envio_debug.log';
     }
-    $rutas[] = __DIR__ . '/mail_envio_debug.log';
     foreach ($rutas as $ruta) {
         if (@file_put_contents($ruta, $linea, FILE_APPEND) !== false) {
             break;

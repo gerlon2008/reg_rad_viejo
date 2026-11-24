@@ -15,10 +15,14 @@ $fecha_de_ahora = (new \DateTime())->format('d-m-Y H:i');
 $fecha_de_ahora_para_archivo = (new \DateTime())->format('d-m-Y');
 
 
-$id_planilla = intval($_GET['id_planilla']);
-$enviar_mail = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1');
-$debug_mail  = (isset($_GET['debug_mail']) && $_GET['debug_mail'] == '1');
-$forzar_mail = (isset($_GET['forzar_mail']) && $_GET['forzar_mail'] == '1');
+$id_planilla    = intval($_GET['id_planilla']);
+$enviar_mail    = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1');
+$debug_mail     = (isset($_GET['debug_mail']) && $_GET['debug_mail'] == '1');
+$forzar_mail    = (isset($_GET['forzar_mail']) && $_GET['forzar_mail'] == '1');
+$carpeta_origen = isset($_GET['origen']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET['origen']) : 'registro_rad5';
+if ($carpeta_origen === '') {
+    $carpeta_origen = 'registro_rad5';
+}
 
 $query_planilla_en_curso = "SELECT * FROM regrad_planilla_diaria_nueva a left join regrad_turnos b on b.id_turnos = a.turno left join regrad_estados_planta c on c.id_estado_planta = a.estado_planta left join regrad_of_rad d on d.id_of_rad = a.of_rad left join regrad_jefes_turno e on e.id_jefes_turno = a.jefe_turno where id_planilla_diaria = $id_planilla ";
 $planilla_en_curso = mysql_query($query_planilla_en_curso, $miconex) or die(mysql_error());
@@ -975,7 +979,11 @@ $pdf->AddPage();
 $pdf->Ln(28);
 
 $pdf->Cell(0, 245, (''), 'LTBR', 0, 'C', TRUE);
-$pdf->Image($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/Graficos/graf.jpg", 13, 39, 184, 242, 'JPG');
+$ruta_grafico = $_SERVER["DOCUMENT_ROOT"] . "/ptr/" . $carpeta_origen . "/Graficos/graf.jpg";
+if (!file_exists($ruta_grafico)) {
+    $ruta_grafico = $_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/Graficos/graf.jpg";
+}
+$pdf->Image($ruta_grafico, 13, 39, 184, 242, 'JPG');
 
 
 // example using general stretching and spacing
@@ -1006,12 +1014,17 @@ $ruta_modulo_mail = '';
 $fecha_cierre_db = isset($row_planilla_en_curso['fecha_hora_cerrado']) ? $row_planilla_en_curso['fecha_hora_cerrado'] : '';
 
 if ($enviar_mail || $debug_mail) {
-    if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
-        $ruta_modulo_mail = $_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php";
-        require_once($ruta_modulo_mail);
-    } else if (file_exists(__DIR__ . '/enviar_mail_planilla.php')) {
-        $ruta_modulo_mail = __DIR__ . '/enviar_mail_planilla.php';
-        require_once($ruta_modulo_mail);
+    $rutas_candidatas_mail = array(
+        $_SERVER["DOCUMENT_ROOT"] . "/ptr/" . $carpeta_origen . "/enviar_mail_planilla.php",
+        $_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php",
+        __DIR__ . '/enviar_mail_planilla.php'
+    );
+    foreach ($rutas_candidatas_mail as $ruta_cand) {
+        if (file_exists($ruta_cand)) {
+            $ruta_modulo_mail = $ruta_cand;
+            require_once($ruta_modulo_mail);
+            break;
+        }
     }
 
     if (!$enviar_mail) {
@@ -1024,7 +1037,7 @@ if ($enviar_mail || $debug_mail) {
     } else if (function_exists('enviar_planilla_por_correo')) {
         $resultado_mail = enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido, $forzar_mail);
     } else {
-        $resultado_mail = array('exito' => false, 'mensaje' => 'No se encontró enviar_mail_planilla.php en ' . $_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/ ni en ' . __DIR__, 'trace' => array());
+        $resultado_mail = array('exito' => false, 'mensaje' => 'No se encontró enviar_mail_planilla.php en ' . $_SERVER["DOCUMENT_ROOT"] . '/ptr/' . $carpeta_origen . '/ ni en /ptr/registro_rad5/', 'trace' => array());
         @file_put_contents(__DIR__ . '/mail_envio_debug.log', '[' . date('Y-m-d H:i:s') . "] ERROR id_planilla=$id_planilla: " . $resultado_mail['mensaje'] . "\n", FILE_APPEND);
     }
 }
@@ -1033,6 +1046,7 @@ if ($debug_mail) {
     header('Content-Type: text/html; charset=utf-8');
     echo "<h2>Diagnóstico de Envío de Planilla #$id_planilla</h2>";
     echo "<ul>";
+    echo "<li><b>origen:</b> " . htmlspecialchars($carpeta_origen) . "</li>";
     echo "<li><b>enviar_mail:</b> " . ($enviar_mail ? '1 (SI)' : '0 (NO)') . "</li>";
     echo "<li><b>forzar_mail:</b> " . ($forzar_mail ? '1 (SI)' : '0 (NO)') . "</li>";
     echo "<li><b>fecha_hora_cerrado en BD:</b> " . htmlspecialchars($fecha_cierre_db !== '' ? $fecha_cierre_db : '(NULL / vacío)') . "</li>";

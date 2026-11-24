@@ -42,9 +42,10 @@ $row_tritio = mysql_fetch_assoc($tritio);
 $totalRows_tritio = mysql_num_rows($tritio);
 //echo $query_tritio;
 
-$id_planilla = intval($_GET['id_planilla']);
-$enviar_mail = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1') ? 1 : 0;
-$volver      = (isset($_GET['volver']) && $_GET['volver'] == '1') ? 1 : 0;
+$id_planilla    = intval($_GET['id_planilla']);
+$enviar_mail    = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1') ? 1 : 0;
+$volver         = (isset($_GET['volver']) && $_GET['volver'] == '1') ? 1 : 0;
+$carpeta_origen = basename(__DIR__);
 ?>
 
 <!doctype html>
@@ -217,7 +218,8 @@ document.getElementById("ChartImage").src = url; //to fill image in html
 var idPlanilla = <?php echo intval($id_planilla); ?>;
 var enviarMail = <?php echo $enviar_mail; ?>;
 var volverListado = <?php echo $volver; ?>;
-var pdfUrl = '/ptr/TCPDF-master/examples/pdf_impresion_registro_radiologico_tcpdf_anteriores.php?id_planilla=' + idPlanilla + (enviarMail ? '&enviar_mail=1' : '');
+var carpetaOrigen = <?php echo json_encode($carpeta_origen); ?>;
+var pdfUrl = '/ptr/TCPDF-master/examples/pdf_impresion_registro_radiologico_tcpdf_anteriores.php?id_planilla=' + idPlanilla + '&origen=' + encodeURIComponent(carpetaOrigen) + (enviarMail ? '&enviar_mail=1' : '');
 
 var pdfDisparado = false;
 function generarPdfYFinalizar() {
@@ -229,7 +231,7 @@ function generarPdfYFinalizar() {
 
 	setTimeout(function() {
 		if (volverListado) {
-			window.location.replace('/ptr/registro_rad5/cargar_planilla.php');
+			window.location.replace('cargar_planilla.php');
 		} else {
 			window.close();
 		}

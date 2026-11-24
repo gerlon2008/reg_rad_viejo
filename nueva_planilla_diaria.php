@@ -2261,7 +2261,7 @@ $hora_actual = (new \DateTime())->format('H:i');
 			var id_planilla = '<?php echo $id_planilla ?>';
 			var id_usuario = '<?php echo $usuario_id ?>';
 			var url = "procesos_reg_rad.php?accion=cerrar_planilla&id_planilla=" + id_planilla + "&id_usuario=" + id_usuario;
-			var url_envio = '/ptr/registro_rad5/pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla + '&enviar_mail=1';
+			var url_envio = 'pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla + '&enviar_mail=1';
 
 			// Abrimos la ventana de forma síncrona dentro del clic para evitar que el navegador la bloquee como popup
 			var ventana_envio = window.open('about:blank', '_blank');
@@ -4030,7 +4030,7 @@ $hora_actual = (new \DateTime())->format('H:i');
 
 		function imprimir_planilla_registro_radiologico() {
 			var id_planilla = '<?php echo $id_planilla ?>'
-			window.open('/ptr/registro_rad5/pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla)
+			window.open('pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla)
 		}
 
 		function ver_planilla_en_curso() {
