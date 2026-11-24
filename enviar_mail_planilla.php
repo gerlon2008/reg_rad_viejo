@@ -27,12 +27,11 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     $remitente     = 'registro_radiologico@na-sa.com.ar';
     $nombre_de     = 'Planilla Registro Radiologico';
 
-    // LISTA DE DESTINATARIOS:
-    // Para PRODUCCIÓN: descomentar la siguiente línea:
-    // $destinatarios = array('ayudantejefedeturno@na-sa.com.ar');
-
-    // Para PRUEBAS (actual):
-    $destinatarios = array('gloncar@na-sa.com.ar');
+    // LISTA DE DESTINATARIOS (PRODUCCIÓN + copia de seguimiento):
+    $destinatarios = array(
+        'ayudantejefedeturno@na-sa.com.ar',
+        'gloncar@na-sa.com.ar'
+    );
 
     $trace = array();
 
