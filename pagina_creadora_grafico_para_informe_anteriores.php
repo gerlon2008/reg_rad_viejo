@@ -42,7 +42,9 @@ $row_tritio = mysql_fetch_assoc($tritio);
 $totalRows_tritio = mysql_num_rows($tritio);
 //echo $query_tritio;
 
-$id_planilla = $_GET['id_planilla'];
+$id_planilla = intval($_GET['id_planilla']);
+$enviar_mail = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1') ? 1 : 0;
+$volver      = (isset($_GET['volver']) && $_GET['volver'] == '1') ? 1 : 0;
 ?>
 
 <!doctype html>
@@ -72,7 +74,11 @@ $id_planilla = $_GET['id_planilla'];
 
 <body style="text-align: center;"	>
 <div>
-	Espere mientras se actualiza el grafico de tritio...
+	<?php if ($enviar_mail) { ?>
+		Espere mientras se genera el PDF y se envía la planilla por correo...
+	<?php } else { ?>
+		Espere mientras se actualiza el grafico de tritio...
+	<?php } ?>
 </div>
 <div>
 	<img src="Images/loading.gif">
@@ -208,15 +214,36 @@ $id_planilla = $_GET['id_planilla'];
 var url = myBar.toBase64Image()
 document.getElementById("ChartImage").src = url; //to fill image in html
 
+var idPlanilla = <?php echo intval($id_planilla); ?>;
+var enviarMail = <?php echo $enviar_mail; ?>;
+var volverListado = <?php echo $volver; ?>;
+var pdfUrl = '/ptr/TCPDF-master/examples/pdf_impresion_registro_radiologico_tcpdf_anteriores.php?id_planilla=' + idPlanilla + (enviarMail ? '&enviar_mail=1' : '');
+
+var pdfDisparado = false;
+function generarPdfYFinalizar() {
+	if (pdfDisparado) {
+		return;
+	}
+	pdfDisparado = true;
+	window.location.href = pdfUrl;
+
+	setTimeout(function() {
+		if (volverListado) {
+			window.location.replace('/ptr/registro_rad5/cargar_planilla.php');
+		} else {
+			window.close();
+		}
+	}, enviarMail ? 12000 : 5000);
+}
+
 $.post("pagina_recibe_imagen_y_guarda_a_archivo_para_informe.php", {coche: url}, function(htmlexterno){
-   $("#cargaexterna").html(htmlexterno);
-    		});
-setTimeout(function() {
-	window.location.href = '/ptr/TCPDF-master/examples/pdf_impresion_registro_radiologico_tcpdf_anteriores.php?id_planilla=<?php echo $id_planilla ?>';
-}, 5000);
-setTimeout(function() {
-	window.close();
-}, 8000);
+	$("#cargaexterna").html(htmlexterno);
+}).always(function() {
+	setTimeout(generarPdfYFinalizar, 500);
+});
+
+// Respaldo de seguridad por si el POST demora demasiado
+setTimeout(generarPdfYFinalizar, 5000);
 
 	</script>
 </body>

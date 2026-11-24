@@ -1,4 +1,7 @@
 <?php
+ignore_user_abort(true);
+set_time_limit(60);
+
 require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/Connections/miconex.php");
 require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/Functions/funciones.php");
 require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/Connections/niveles.php");
@@ -12,7 +15,8 @@ $fecha_de_ahora = (new \DateTime())->format('d-m-Y H:i');
 $fecha_de_ahora_para_archivo = (new \DateTime())->format('d-m-Y');
 
 
-$id_planilla = $_GET['id_planilla'];
+$id_planilla = intval($_GET['id_planilla']);
+$enviar_mail = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1');
 
 $query_planilla_en_curso = "SELECT * FROM regrad_planilla_diaria_nueva a left join regrad_turnos b on b.id_turnos = a.turno left join regrad_estados_planta c on c.id_estado_planta = a.estado_planta left join regrad_of_rad d on d.id_of_rad = a.of_rad left join regrad_jefes_turno e on e.id_jefes_turno = a.jefe_turno where id_planilla_diaria = $id_planilla ";
 $planilla_en_curso = mysql_query($query_planilla_en_curso, $miconex) or die(mysql_error());
@@ -979,7 +983,9 @@ $pdf->Image($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/Graficos/graf.jpg", 
 
 //Close and output PDF document
 //Close and output PDF document
-ob_end_clean();
+if (ob_get_length() !== false) {
+    @ob_end_clean();
+}
 
 $nombre_archivo_pdf = 'Registro_' . formafecha11($row_planilla_en_curso['fecha']) . ' - ' . ($row_planilla_en_curso['horarios']) . '.pdf';
 $dir_registros      = __DIR__ . '/Registros_pdfs';
@@ -992,15 +998,25 @@ if (!is_dir($dir_registros)) {
 }
 @file_put_contents($ruta_archivo_pdf, $pdf_contenido);
 
-// 2. Enviar por correo a Exchange solo si viene el parámetro de cierre o si es cierre
-if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
-    require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php");
-    enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido);
+// 2. Enviar por correo a Exchange solo cuando viene enviar_mail=1 y la planilla ya figura cerrada
+if ($enviar_mail && !empty($row_planilla_en_curso['fecha_hora_cerrado'])) {
+    if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
+        require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php");
+    } else if (file_exists(__DIR__ . '/enviar_mail_planilla.php')) {
+        require_once(__DIR__ . '/enviar_mail_planilla.php');
+    }
+
+    if (function_exists('enviar_planilla_por_correo')) {
+        enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido);
+    }
 }
 
 // 3. Descarga / visualización en navegador
 header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="' . $nombre_archivo_pdf . '"');
+header('Content-Length: ' . strlen($pdf_contenido));
+header('Cache-Control: private, max-age=0, must-revalidate');
+header('Pragma: public');
 echo $pdf_contenido;
 exit;
 //============================================================+

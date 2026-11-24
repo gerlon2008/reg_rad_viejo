@@ -67,7 +67,14 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     // -------------------------------------------------------------
     // 3. CONSTRUCCIÓN DEL CORREO (ASUNTO Y CUERPO)
     // -------------------------------------------------------------
-    $fecha_str   = isset($datos_planilla['fecha']) ? $datos_planilla['fecha'] : date('d/m/Y');
+    $fecha_raw = isset($datos_planilla['fecha']) ? trim($datos_planilla['fecha']) : '';
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_raw)) {
+        $fecha_str = date('d/m/Y', strtotime($fecha_raw));
+    } else if (!empty($fecha_raw)) {
+        $fecha_str = $fecha_raw;
+    } else {
+        $fecha_str = date('d/m/Y');
+    }
     $horario_str = isset($datos_planilla['horarios']) ? $datos_planilla['horarios'] : 'Turno';
     $oficial_str = (isset($datos_planilla['of_apellido']) && isset($datos_planilla['of_nombre']))
                     ? strtoupper($datos_planilla['of_apellido'] . ', ' . $datos_planilla['of_nombre'])
@@ -221,8 +228,8 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
 
         // Guardar registro en BD si hay conexion
         if ($miconex) {
-            $dest_str = mysql_real_escape_string(implode(', ', $destinatarios));
-            $nom_str  = mysql_real_escape_string($nombre_archivo);
+            $dest_str = mysql_real_escape_string(implode(', ', $destinatarios), $miconex);
+            $nom_str  = mysql_real_escape_string($nombre_archivo, $miconex);
             @mysql_query("INSERT INTO `regrad_planillas_enviadas` (`id_planilla`, `fecha_envio`, `archivo`, `destinatarios`) 
                           VALUES ($id_planilla, NOW(), '$nom_str', '$dest_str')", $miconex);
         }

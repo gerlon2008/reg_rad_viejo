@@ -2251,16 +2251,48 @@ $hora_actual = (new \DateTime())->format('H:i');
 			$('#tasa_dosis_rutina_campo').val('')
 		}
 
+		var cerrando_planilla = false;
 		function cerrar_planilla() {
+			if (cerrando_planilla) {
+				return;
+			}
+			cerrando_planilla = true;
+
 			var id_planilla = '<?php echo $id_planilla ?>';
 			var id_usuario = '<?php echo $usuario_id ?>';
 			var url = "procesos_reg_rad.php?accion=cerrar_planilla&id_planilla=" + id_planilla + "&id_usuario=" + id_usuario;
+			var url_envio = '/ptr/registro_rad5/pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla + '&enviar_mail=1';
+
+			// Abrimos la ventana de forma síncrona dentro del clic para evitar que el navegador la bloquee como popup
+			var ventana_envio = window.open('about:blank', '_blank');
+			if (ventana_envio) {
+				try {
+					ventana_envio.document.write('<p style="font-family:Arial,sans-serif;text-align:center;margin-top:40px;">Cerrando planilla y preparando envío de correo...</p>');
+				} catch (e) {}
+			}
+
 			$.get(url, function(data) {
-				if (data == "ok") {
-					// Abre en segundo plano la generación que crea el PDF y despacha el correo
-					window.open('/ptr/registro_rad5/pagina_creadora_grafico_para_informe_anteriores.php?id_planilla=' + id_planilla);
-					window.location.replace('cargar_planilla.php');
+				if ($.trim(data) == "ok") {
+					if (ventana_envio) {
+						ventana_envio.location.href = url_envio;
+						window.location.replace('cargar_planilla.php');
+					} else {
+						// Respaldo si el navegador bloqueó popups: continuar en la misma pestaña y volver al listado al finalizar
+						window.location.replace(url_envio + '&volver=1');
+					}
+				} else {
+					if (ventana_envio) {
+						ventana_envio.close();
+					}
+					cerrando_planilla = false;
+					alert('No se pudo cerrar la planilla. Intente nuevamente.');
 				}
+			}).fail(function() {
+				if (ventana_envio) {
+					ventana_envio.close();
+				}
+				cerrando_planilla = false;
+				alert('Error de conexión al cerrar la planilla. Intente nuevamente.');
 			});
 		}
 
