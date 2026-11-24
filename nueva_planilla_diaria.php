@@ -2268,6 +2268,7 @@ $hora_actual = (new \DateTime())->format('H:i');
 			if (ventana_envio) {
 				try {
 					ventana_envio.document.write('<p style="font-family:Arial,sans-serif;text-align:center;margin-top:40px;">Cerrando planilla y preparando envío de correo...</p>');
+					ventana_envio.document.close();
 				} catch (e) {}
 			}
 

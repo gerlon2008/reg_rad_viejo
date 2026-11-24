@@ -5,7 +5,21 @@
  * Compatible con PHP 5.5+ (no requiere OpenSSL ni librerías externas)
  */
 
-function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $datos_planilla = array(), $miconex = null, $pdf_contenido_directo = null) {
+function registrar_log_mail($mensaje) {
+    $linea = '[' . date('Y-m-d H:i:s') . '] ' . $mensaje . "\n";
+    $rutas = array();
+    if (!empty($_SERVER["DOCUMENT_ROOT"])) {
+        $rutas[] = $_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/mail_envio_debug.log';
+    }
+    $rutas[] = __DIR__ . '/mail_envio_debug.log';
+    foreach ($rutas as $ruta) {
+        if (@file_put_contents($ruta, $linea, FILE_APPEND) !== false) {
+            break;
+        }
+    }
+}
+
+function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $datos_planilla = array(), $miconex = null, $pdf_contenido_directo = null, $forzar_reenvio = false) {
     // -------------------------------------------------------------
     // 1. CONFIGURACIÓN DEL SERVIDOR Y DESTINATARIOS
     // -------------------------------------------------------------
@@ -21,35 +35,44 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     // Para PRUEBAS (actual):
     $destinatarios = array('gloncar@na-sa.com.ar');
 
+    $trace = array();
+
     // -------------------------------------------------------------
     // 2. CONTROL DE DUPLICADOS (Evitar reenviar si ya fue enviada)
     // -------------------------------------------------------------
     $id_planilla = intval($id_planilla);
     if ($id_planilla <= 0) {
-        return array('exito' => false, 'mensaje' => 'ID de planilla inválido');
+        registrar_log_mail("ERROR id_planilla inválido: $id_planilla");
+        return array('exito' => false, 'mensaje' => 'ID de planilla inválido', 'trace' => $trace);
     }
 
-    // A) Control por base de datos (si la conexión está disponible)
-    if ($miconex) {
-        @mysql_query("CREATE TABLE IF NOT EXISTS `regrad_planillas_enviadas` (
-            `id_planilla` INT(11) NOT NULL PRIMARY KEY,
-            `fecha_envio` DATETIME NOT NULL,
-            `archivo` VARCHAR(255) DEFAULT NULL,
-            `destinatarios` TEXT DEFAULT NULL
-        )", $miconex);
-
-        $res_check = @mysql_query("SELECT id_planilla FROM `regrad_planillas_enviadas` WHERE id_planilla = $id_planilla LIMIT 1", $miconex);
-        if ($res_check && mysql_num_rows($res_check) > 0) {
-            // Ya fue enviada previamente, omitimos el envío silenciosamente
-            return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (DB)');
-        }
-    }
-
-    // B) Control por archivo testigo en disco (doble seguridad)
     $dir_registros = (!empty($ruta_pdf) && is_string($ruta_pdf)) ? dirname($ruta_pdf) : ($_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/Registros_pdfs');
     $archivo_lock = $dir_registros . '/.mail_enviado_' . $id_planilla . '.lock';
-    if (file_exists($archivo_lock)) {
-        return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (archivo lock)');
+
+    if (!$forzar_reenvio) {
+        // A) Control por base de datos (si la conexión está disponible)
+        if ($miconex) {
+            @mysql_query("CREATE TABLE IF NOT EXISTS `regrad_planillas_enviadas` (
+                `id_planilla` INT(11) NOT NULL PRIMARY KEY,
+                `fecha_envio` DATETIME NOT NULL,
+                `archivo` VARCHAR(255) DEFAULT NULL,
+                `destinatarios` TEXT DEFAULT NULL
+            )", $miconex);
+
+            $res_check = @mysql_query("SELECT id_planilla FROM `regrad_planillas_enviadas` WHERE id_planilla = $id_planilla LIMIT 1", $miconex);
+            if ($res_check && mysql_num_rows($res_check) > 0) {
+                registrar_log_mail("OMITIDO id_planilla=$id_planilla: ya figura en tabla regrad_planillas_enviadas");
+                return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (DB)', 'trace' => $trace);
+            }
+        }
+
+        // B) Control por archivo testigo en disco (doble seguridad)
+        if (file_exists($archivo_lock)) {
+            registrar_log_mail("OMITIDO id_planilla=$id_planilla: ya existe archivo lock $archivo_lock");
+            return array('exito' => true, 'mensaje' => 'Ya fue enviada anteriormente por correo (archivo lock)', 'trace' => $trace);
+        }
+    } else {
+        $trace[] = 'Modo forzar_reenvio activo (se omite control de duplicados)';
     }
 
     // Obtener el contenido del PDF (directo en memoria o desde disco)
@@ -61,8 +84,12 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     }
 
     if (empty($pdf_contenido)) {
-        return array('exito' => false, 'mensaje' => 'El contenido del PDF está vacío o no se encontró el archivo: ' . $ruta_pdf);
+        $msg = 'El contenido del PDF está vacío o no se encontró el archivo: ' . $ruta_pdf;
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg");
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
     }
+
+    $trace[] = 'PDF listo: ' . strlen($pdf_contenido) . ' bytes (' . $nombre_archivo . ')';
 
     // -------------------------------------------------------------
     // 3. CONSTRUCCIÓN DEL CORREO (ASUNTO Y CUERPO)
@@ -87,7 +114,7 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     $asunto_texto = "Planilla Diaria Registro Radiológico - $fecha_str - $horario_str";
     $asunto_header = '=?UTF-8?B?' . base64_encode($asunto_texto) . '?=';
 
-    // Mensaje en formato texto plano y HTML
+    // Mensaje en formato HTML (normalizado a CRLF para compatibilidad estricta con Exchange)
     $mensaje_html = "
     <html>
     <head><meta charset='UTF-8'></head>
@@ -129,17 +156,14 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     </body>
     </html>
     ";
+    $mensaje_html = str_replace(array("\r\n", "\r", "\n"), "\r\n", $mensaje_html);
+    $mensaje_html = preg_replace('/^\./m', '..', $mensaje_html);
 
     // -------------------------------------------------------------
     // 4. PREPARACIÓN MIME MULTIPART CON ADJUNTO PDF
     // -------------------------------------------------------------
     $boundary = "==_MIME_BOUNDARY_" . md5(time() . $id_planilla);
-
-    // Codificar el PDF en base64
-    if (empty($pdf_contenido) && !empty($ruta_pdf) && file_exists($ruta_pdf)) {
-        $pdf_contenido = file_get_contents($ruta_pdf);
-    }
-    $pdf_adjunto_b64 = chunk_split(base64_encode($pdf_contenido));
+    $pdf_adjunto_b64 = chunk_split(base64_encode($pdf_contenido), 76, "\r\n");
 
     $cuerpo_mime  = "From: $nombre_de <$remitente>\r\n";
     $cuerpo_mime .= "To: " . implode(', ', $destinatarios) . "\r\n";
@@ -164,44 +188,75 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     $cuerpo_mime .= "\r\n";
     $cuerpo_mime .= $pdf_adjunto_b64 . "\r\n";
 
-    // Cierre MIME
+    // Cierre MIME y terminador SMTP
     $cuerpo_mime .= "--$boundary--\r\n";
-    $cuerpo_mime .= ".";
+    $cuerpo_mime .= ".\r\n";
 
     // -------------------------------------------------------------
     // 5. ENVÍO POR SOCKET SMTP A EXCHANGE 2019
     // -------------------------------------------------------------
-    $socket = @fsockopen($servidor_smtp, $puerto_smtp, $errno, $errstr, 10);
+    $socket = @fsockopen($servidor_smtp, $puerto_smtp, $errno, $errstr, 15);
     if (!$socket) {
-        return array('exito' => false, 'mensaje' => "No se pudo conectar a $servidor_smtp:$puerto_smtp: $errstr ($errno)");
+        $msg = "No se pudo conectar a $servidor_smtp:$puerto_smtp: $errstr ($errno)";
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg");
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
     }
+    stream_set_timeout($socket, 30);
+
+    $fn_escribir_todo = function($s, $datos) {
+        $total = strlen($datos);
+        $enviados = 0;
+        while ($enviados < $total) {
+            $chunk = substr($datos, $enviados, 8192);
+            $escritos = @fwrite($s, $chunk);
+            if ($escritos === false || $escritos === 0) {
+                return $enviados;
+            }
+            $enviados += $escritos;
+        }
+        return $enviados;
+    };
 
     $fn_leer = function($s) {
         $res = '';
-        while ($linea = fgets($s, 512)) {
+        while (($linea = @fgets($s, 512)) !== false) {
             $res .= $linea;
-            if (substr($linea, 3, 1) == ' ') break;
+            if (strlen($linea) >= 4 && substr($linea, 3, 1) == ' ') {
+                break;
+            }
         }
-        return $res;
+        return trim($res);
     };
 
-    $fn_cmd = function($s, $cmd) use ($fn_leer) {
-        fwrite($s, $cmd . "\r\n");
+    $fn_cmd = function($s, $cmd) use ($fn_leer, $fn_escribir_todo) {
+        $fn_escribir_todo($s, $cmd . "\r\n");
         return $fn_leer($s);
     };
 
     // Saludo inicial de Exchange
-    $fn_leer($socket);
+    $banner = $fn_leer($socket);
+    $trace[] = "BANNER: $banner";
 
     // Protocolo SMTP
-    $fn_cmd($socket, "EHLO central.nasa");
-    $fn_cmd($socket, "MAIL FROM:<$remitente>");
+    $ehlo_res = $fn_cmd($socket, "EHLO central.nasa");
+    $trace[] = "EHLO: $ehlo_res";
+
+    $from_res = $fn_cmd($socket, "MAIL FROM:<$remitente>");
+    $trace[] = "MAIL FROM: $from_res";
+    if (strpos($from_res, '250') === false) {
+        $fn_cmd($socket, "QUIT");
+        fclose($socket);
+        $msg = "Exchange rechazó MAIL FROM: $from_res";
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg");
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
+    }
 
     $al_menos_uno = false;
     foreach ($destinatarios as $dest) {
         $dest = trim($dest);
         if (!empty($dest)) {
             $rcpt_res = $fn_cmd($socket, "RCPT TO:<$dest>");
+            $trace[] = "RCPT TO <$dest>: $rcpt_res";
             if (strpos($rcpt_res, '250') !== false) {
                 $al_menos_uno = true;
             }
@@ -211,18 +266,35 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     if (!$al_menos_uno) {
         $fn_cmd($socket, "QUIT");
         fclose($socket);
-        return array('exito' => false, 'mensaje' => 'El servidor Exchange rechazó los destinatarios.');
+        $msg = 'El servidor Exchange rechazó los destinatarios.';
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg | " . implode(' ; ', $trace));
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
     }
 
-    $fn_cmd($socket, "DATA");
-    $data_res = $fn_cmd($socket, $cuerpo_mime);
+    $data_cmd_res = $fn_cmd($socket, "DATA");
+    $trace[] = "DATA CMD: $data_cmd_res";
+    if (strpos($data_cmd_res, '354') === false) {
+        $fn_cmd($socket, "QUIT");
+        fclose($socket);
+        $msg = "Exchange no aceptó DATA: $data_cmd_res";
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg");
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
+    }
+
+    $esperados = strlen($cuerpo_mime);
+    $escritos = $fn_escribir_todo($socket, $cuerpo_mime);
+    $trace[] = "MIME enviados: $escritos / $esperados bytes";
+
+    $data_res = $fn_leer($socket);
+    $trace[] = "DATA RES: $data_res";
+
     $fn_cmd($socket, "QUIT");
     fclose($socket);
 
     // -------------------------------------------------------------
     // 6. MARCAR COMO ENVIADA
     // -------------------------------------------------------------
-    if (strpos($data_res, '250') !== false) {
+    if ($escritos === $esperados && strpos($data_res, '250') !== false) {
         // Guardar lock en archivo
         @file_put_contents($archivo_lock, date('Y-m-d H:i:s') . " - Enviado a: " . implode(', ', $destinatarios));
 
@@ -230,12 +302,15 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
         if ($miconex) {
             $dest_str = mysql_real_escape_string(implode(', ', $destinatarios), $miconex);
             $nom_str  = mysql_real_escape_string($nombre_archivo, $miconex);
-            @mysql_query("INSERT INTO `regrad_planillas_enviadas` (`id_planilla`, `fecha_envio`, `archivo`, `destinatarios`) 
+            @mysql_query("INSERT IGNORE INTO `regrad_planillas_enviadas` (`id_planilla`, `fecha_envio`, `archivo`, `destinatarios`) 
                           VALUES ($id_planilla, NOW(), '$nom_str', '$dest_str')", $miconex);
         }
 
-        return array('exito' => true, 'mensaje' => 'Correo enviado exitosamente.');
+        registrar_log_mail("OK id_planilla=$id_planilla enviado a " . implode(', ', $destinatarios) . " ($escritos bytes) | $data_res");
+        return array('exito' => true, 'mensaje' => 'Correo enviado exitosamente.', 'trace' => $trace);
     } else {
-        return array('exito' => false, 'mensaje' => 'Error al transferir contenido DATA: ' . $data_res);
+        $msg = "Error al transferir contenido DATA ($escritos/$esperados bytes): $data_res";
+        registrar_log_mail("ERROR id_planilla=$id_planilla: $msg");
+        return array('exito' => false, 'mensaje' => $msg, 'trace' => $trace);
     }
 }

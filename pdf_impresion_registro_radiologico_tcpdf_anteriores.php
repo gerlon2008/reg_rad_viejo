@@ -17,6 +17,8 @@ $fecha_de_ahora_para_archivo = (new \DateTime())->format('d-m-Y');
 
 $id_planilla = intval($_GET['id_planilla']);
 $enviar_mail = (isset($_GET['enviar_mail']) && $_GET['enviar_mail'] == '1');
+$debug_mail  = (isset($_GET['debug_mail']) && $_GET['debug_mail'] == '1');
+$forzar_mail = (isset($_GET['forzar_mail']) && $_GET['forzar_mail'] == '1');
 
 $query_planilla_en_curso = "SELECT * FROM regrad_planilla_diaria_nueva a left join regrad_turnos b on b.id_turnos = a.turno left join regrad_estados_planta c on c.id_estado_planta = a.estado_planta left join regrad_of_rad d on d.id_of_rad = a.of_rad left join regrad_jefes_turno e on e.id_jefes_turno = a.jefe_turno where id_planilla_diaria = $id_planilla ";
 $planilla_en_curso = mysql_query($query_planilla_en_curso, $miconex) or die(mysql_error());
@@ -999,16 +1001,52 @@ if (!is_dir($dir_registros)) {
 @file_put_contents($ruta_archivo_pdf, $pdf_contenido);
 
 // 2. Enviar por correo a Exchange solo cuando viene enviar_mail=1 y la planilla ya figura cerrada
-if ($enviar_mail && !empty($row_planilla_en_curso['fecha_hora_cerrado'])) {
+$resultado_mail = null;
+$ruta_modulo_mail = '';
+$fecha_cierre_db = isset($row_planilla_en_curso['fecha_hora_cerrado']) ? $row_planilla_en_curso['fecha_hora_cerrado'] : '';
+
+if ($enviar_mail || $debug_mail) {
     if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php")) {
-        require_once($_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php");
+        $ruta_modulo_mail = $_SERVER["DOCUMENT_ROOT"] . "/ptr/registro_rad5/enviar_mail_planilla.php";
+        require_once($ruta_modulo_mail);
     } else if (file_exists(__DIR__ . '/enviar_mail_planilla.php')) {
-        require_once(__DIR__ . '/enviar_mail_planilla.php');
+        $ruta_modulo_mail = __DIR__ . '/enviar_mail_planilla.php';
+        require_once($ruta_modulo_mail);
     }
 
-    if (function_exists('enviar_planilla_por_correo')) {
-        enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido);
+    if (!$enviar_mail) {
+        $resultado_mail = array('exito' => false, 'mensaje' => 'Falta parámetro enviar_mail=1 en la URL', 'trace' => array());
+    } else if (empty($fecha_cierre_db) || $fecha_cierre_db == '0000-00-00 00:00:00') {
+        $resultado_mail = array('exito' => false, 'mensaje' => 'La planilla todavía no figura cerrada en BD (fecha_hora_cerrado vacía)', 'trace' => array());
+        if (function_exists('registrar_log_mail')) {
+            registrar_log_mail("OMITIDO id_planilla=$id_planilla: fecha_hora_cerrado vacía o inválida ('$fecha_cierre_db')");
+        }
+    } else if (function_exists('enviar_planilla_por_correo')) {
+        $resultado_mail = enviar_planilla_por_correo($id_planilla, $ruta_archivo_pdf, $nombre_archivo_pdf, $row_planilla_en_curso, $miconex, $pdf_contenido, $forzar_mail);
+    } else {
+        $resultado_mail = array('exito' => false, 'mensaje' => 'No se encontró enviar_mail_planilla.php en ' . $_SERVER["DOCUMENT_ROOT"] . '/ptr/registro_rad5/ ni en ' . __DIR__, 'trace' => array());
+        @file_put_contents(__DIR__ . '/mail_envio_debug.log', '[' . date('Y-m-d H:i:s') . "] ERROR id_planilla=$id_planilla: " . $resultado_mail['mensaje'] . "\n", FILE_APPEND);
     }
+}
+
+if ($debug_mail) {
+    header('Content-Type: text/html; charset=utf-8');
+    echo "<h2>Diagnóstico de Envío de Planilla #$id_planilla</h2>";
+    echo "<ul>";
+    echo "<li><b>enviar_mail:</b> " . ($enviar_mail ? '1 (SI)' : '0 (NO)') . "</li>";
+    echo "<li><b>forzar_mail:</b> " . ($forzar_mail ? '1 (SI)' : '0 (NO)') . "</li>";
+    echo "<li><b>fecha_hora_cerrado en BD:</b> " . htmlspecialchars($fecha_cierre_db !== '' ? $fecha_cierre_db : '(NULL / vacío)') . "</li>";
+    echo "<li><b>PDF generado:</b> " . strlen($pdf_contenido) . " bytes (" . htmlspecialchars($ruta_archivo_pdf) . ")</li>";
+    echo "<li><b>Módulo correo encontrado:</b> " . htmlspecialchars($ruta_modulo_mail !== '' ? $ruta_modulo_mail : 'NO ENCONTRADO') . "</li>";
+    echo "</ul>";
+    if ($resultado_mail) {
+        $color = !empty($resultado_mail['exito']) ? 'green' : 'red';
+        echo "<h3 style='color:$color;'>Resultado: " . htmlspecialchars($resultado_mail['mensaje']) . "</h3>";
+        if (!empty($resultado_mail['trace'])) {
+            echo "<h4>Traza SMTP:</h4><pre style='background:#f4f4f4;padding:10px;border:1px solid #ccc;'>" . htmlspecialchars(implode("\n", $resultado_mail['trace'])) . "</pre>";
+        }
+    }
+    exit;
 }
 
 // 3. Descarga / visualización en navegador
