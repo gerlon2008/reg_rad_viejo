@@ -90,6 +90,7 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     }
 
     $trace[] = 'PDF listo: ' . strlen($pdf_contenido) . ' bytes (' . $nombre_archivo . ')';
+    $trace[] = 'De: ' . $remitente . ' | Para: ' . implode(', ', $destinatarios);
 
     // -------------------------------------------------------------
     // 3. CONSTRUCCIÓN DEL CORREO (ASUNTO Y CUERPO)
@@ -114,7 +115,7 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     $asunto_texto = "Planilla Diaria Registro Radiológico - $fecha_str - $horario_str";
     $asunto_header = '=?UTF-8?B?' . base64_encode($asunto_texto) . '?=';
 
-    // Mensaje en formato HTML (normalizado a CRLF para compatibilidad estricta con Exchange)
+    // Mensaje en formato HTML (codificado en Base64 para evitar problemas de acentos/8bit en Exchange)
     $mensaje_html = "
     <html>
     <head><meta charset='UTF-8'></head>
@@ -156,19 +157,20 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     </body>
     </html>
     ";
-    $mensaje_html = str_replace(array("\r\n", "\r", "\n"), "\r\n", $mensaje_html);
-    $mensaje_html = preg_replace('/^\./m', '..', $mensaje_html);
+    $mensaje_html_b64 = chunk_split(base64_encode($mensaje_html), 76, "\r\n");
 
     // -------------------------------------------------------------
     // 4. PREPARACIÓN MIME MULTIPART CON ADJUNTO PDF
     // -------------------------------------------------------------
     $boundary = "==_MIME_BOUNDARY_" . md5(time() . $id_planilla);
+    $message_id = '<planilla-' . $id_planilla . '-' . time() . '@na-sa.com.ar>';
     $pdf_adjunto_b64 = chunk_split(base64_encode($pdf_contenido), 76, "\r\n");
 
     $cuerpo_mime  = "From: $nombre_de <$remitente>\r\n";
     $cuerpo_mime .= "To: " . implode(', ', $destinatarios) . "\r\n";
     $cuerpo_mime .= "Subject: $asunto_header\r\n";
     $cuerpo_mime .= "Date: " . date('r') . "\r\n";
+    $cuerpo_mime .= "Message-ID: $message_id\r\n";
     $cuerpo_mime .= "MIME-Version: 1.0\r\n";
     $cuerpo_mime .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
     $cuerpo_mime .= "\r\n";
@@ -176,9 +178,9 @@ function enviar_planilla_por_correo($id_planilla, $ruta_pdf, $nombre_archivo, $d
     // Parte HTML
     $cuerpo_mime .= "--$boundary\r\n";
     $cuerpo_mime .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $cuerpo_mime .= "Content-Transfer-Encoding: 8bit\r\n";
+    $cuerpo_mime .= "Content-Transfer-Encoding: base64\r\n";
     $cuerpo_mime .= "\r\n";
-    $cuerpo_mime .= $mensaje_html . "\r\n";
+    $cuerpo_mime .= $mensaje_html_b64 . "\r\n";
 
     // Parte Adjunto PDF
     $cuerpo_mime .= "--$boundary\r\n";

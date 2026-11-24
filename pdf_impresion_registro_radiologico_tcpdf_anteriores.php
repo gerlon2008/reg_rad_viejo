@@ -1038,6 +1038,13 @@ if ($debug_mail) {
     echo "<li><b>fecha_hora_cerrado en BD:</b> " . htmlspecialchars($fecha_cierre_db !== '' ? $fecha_cierre_db : '(NULL / vacío)') . "</li>";
     echo "<li><b>PDF generado:</b> " . strlen($pdf_contenido) . " bytes (" . htmlspecialchars($ruta_archivo_pdf) . ")</li>";
     echo "<li><b>Módulo correo encontrado:</b> " . htmlspecialchars($ruta_modulo_mail !== '' ? $ruta_modulo_mail : 'NO ENCONTRADO') . "</li>";
+    $res_prev = @mysql_query("SELECT * FROM `regrad_planillas_enviadas` WHERE id_planilla = $id_planilla LIMIT 1", $miconex);
+    if ($res_prev && mysql_num_rows($res_prev) > 0) {
+        $row_prev = mysql_fetch_assoc($res_prev);
+        echo "<li><b>Registro en BD regrad_planillas_enviadas:</b> enviado el " . htmlspecialchars($row_prev['fecha_envio']) . " a <b>" . htmlspecialchars($row_prev['destinatarios']) . "</b> (" . htmlspecialchars($row_prev['archivo']) . ")</li>";
+    } else {
+        echo "<li><b>Registro en BD regrad_planillas_enviadas:</b> (ninguno)</li>";
+    }
     echo "</ul>";
     if ($resultado_mail) {
         $color = !empty($resultado_mail['exito']) ? 'green' : 'red';
